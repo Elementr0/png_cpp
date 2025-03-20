@@ -4,12 +4,15 @@
 #include <array>    
 #include <vector>
 #include <cstdint>
+#include <zlib.h>
 
 // Function declarations (prototypes)
 void creat_header_png(std::string name);
 void create_IHDR(std::string name, int Length, int Width, int Bit_depth, int Color_type);
 std::array<unsigned char, 4> intToByteArray(int number);
 uint32_t calculateCRC32(const std::vector<unsigned char>& data);
+void create_IDAT(std::string name, const std::vector<unsigned char>& image_data, int width, int height);
+void create_IEND(std::string name);
 
 const uint32_t crcTable[256] = {
     // CRC Table
@@ -56,9 +59,22 @@ uint32_t calculateCRC32(const std::vector<unsigned char>& data) {
 }
 
 int main() {
-    std::string name = "test1";
+    std::string name = "test2";
     creat_header_png(name);
     create_IHDR(name, 248, 249, 8, 6);
+
+    int width = 248, height = 249;
+    std::vector<unsigned char> image_data;
+    for (int y = 0; y < height; ++y) {
+        image_data.push_back(0); // фильтр
+        for (int x = 0; x < width; ++x) {
+            image_data.push_back(255); // R
+            image_data.push_back(0);   // G
+            image_data.push_back(0);   // B
+            image_data.push_back(255); // A
+        }
+    }
+    create_IDAT(name, image_data, width, height);
 }
 
 void creat_header_png(std::string name) {
@@ -164,13 +180,60 @@ void create_IHDR(std::string name, int Length, int Width, int Bit_depth, int Col
 
     file.write(reinterpret_cast<const char*>(crcData.data()), crcData.size());
     uint32_t crcValue = calculateCRC32(crcData);
-
-    file.put(0x00); // Пока не используем остальные байты
     
     // Записываем CRC-32
     auto crcBytes = intToByteArray(crcValue);
     file.write(reinterpret_cast<const char*>(crcBytes.data()), crcBytes.size());
     
+    file.close();
+}
+// void create_IDAT(std::string name, int Length){
+//     std::ofstream file(name + ".png", std::ios::binary | std::ios::app);
+//     unsigned char IDATheader[] = {0x49, 0x44, 0x41, 0x54}; //IDAT в качестве ASCII
+//     std:: vector<unsigned char> chunk_data = {0x00, 0x00, 0x00, 0x00}; //первые четыре байта для размера чанка, далее изменяется
+//     chunk_data.insert(chunk_data.end(), IDATheader, IDATheader+4);
+//     file.write(reinterpret_cast<const char*>(chunk_data.data()), chunk_data.size());
+
+//     std::vector<unsigned char> RGB;
+
+
+
+//     file.close();
+// }
+
+void create_IDAT(std::string name, const std::vector<unsigned char>& image_data, int width, int height) {
+    std::ofstream file(name + ".png", std::ios::binary | std::ios::app);
+    
+    std::vector<unsigned char> compressed_data;
+    uLongf compressed_size = compressBound(image_data.size());
+    compressed_data.resize(compressed_size);
+    
+    if (compress(compressed_data.data(), &compressed_size, image_data.data(), image_data.size()) != Z_OK) {
+        std::cerr << "Ошибка сжатия данных IDAT!" << std::endl;
+        return;
+    }
+    
+    compressed_data.resize(compressed_size);
+    auto length_bytes = intToByteArray(compressed_size);
+    unsigned char IDATheader[] = {0x49, 0x44, 0x41, 0x54};
+    
+    file.write(reinterpret_cast<char*>(length_bytes.data()), length_bytes.size());
+    file.write(reinterpret_cast<char*>(IDATheader), sizeof(IDATheader));
+    file.write(reinterpret_cast<char*>(compressed_data.data()), compressed_data.size());
+    
+    std::vector<unsigned char> crcData(IDATheader, IDATheader + 4);
+    crcData.insert(crcData.end(), compressed_data.begin(), compressed_data.end());
+    uint32_t crcValue = calculateCRC32(crcData);
+    auto crcBytes = intToByteArray(crcValue);
+    file.write(reinterpret_cast<char*>(crcBytes.data()), crcBytes.size());
+    
+    file.close();
+}
+
+void create_IEND(std::string name){
+    std::ofstream file(name + ".png", std::ios::binary | std::ios::app);
+    std::vector<unsigned char> data ={0x00,0x00,0x00,0x00,0x49,0x45,0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82};
+    file.write(reinterpret_cast<char*>(data.data()), data.size());
     file.close();
 }
 

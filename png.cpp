@@ -8,9 +8,9 @@ void create_IHDR(std::string name, int Length, int Width, int Bit_depth, int Col
 std::array<unsigned char, 4> intToByteArray(int number);
 
 int main() {
-    std::string name = "test";
+    std::string name = "test1";
     creat_header_png(name);
-    create_IHDR(name, 32, 32, 82, 33);
+    create_IHDR(name, 32, 32, 1, 0);
 }
 
 void creat_header_png(std::string name) {
@@ -104,7 +104,12 @@ void create_IHDR(std::string name, int Length, int Width, int Bit_depth, int Col
             break;
         }
     }
+    file.put(0x00); //Compression method (Байт метода сжатия) пока не нужно
+    file.put(0x00); //Filtration method  (Байт метода сжатия) пока не нужно
+    file.put(0x00); //Interlacing method, later (Байт метода интерлейсинга) будет сделан позже(когда пойму нахуй)
+    //Реализовать контрольную сумму
 
+    
     file.close();
 }
 
